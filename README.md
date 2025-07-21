@@ -2,3 +2,62 @@
 
 git remote set-url origin git@github.com-hoverzhang123:hoverzhang123/fullstackReceipt.git
 
+# npx create-next-app@latest
+# run website
+npm run dev
+
+
+#Add lines below for each request:
+Product Requirements Document (PRD)
+
+Project Name: Recipe Sharing Platform
+
+Objective: To build a web application where users can upload and browse recipes, leveraging Next.js for the frontend and Supabase for the backend (database and authentication).
+
+Core Features
+
+User Authentication:
+
+Users can sign up, log in, and log out using Supabase authentication.
+
+Password reset functionality.
+
+Recipe Management:
+
+Users can upload recipes with details like title, ingredients, steps, and an optional image.
+
+Users can browse all uploaded recipes.
+
+Users can view a detailed page for each recipe.
+
+Search and Filtering:
+
+Basic keyword search functionality.
+
+Filter recipes by category (e.g., appetizers, desserts, main courses).
+
+Responsive Design:
+
+Ensure the platform is mobile-friendly and provides a seamless user experience on all devices.
+
+Technical Stack
+
+Frontend:
+
+Framework: Next.js
+
+Styling: Tailwind CSS or CSS Modules
+
+Here's a text version of the provided image:
+
+2. Backend:
+
+Database: Supabase PostgreSQL
+
+Authentication: Supabase Auth
+
+3. Deployment:
+
+Vercel for hosting the Next.js application
+
+Supabase for database and authentication hosting
