@@ -60,4 +60,31 @@ Authentication: Supabase Auth
 
 Vercel for hosting the Next.js application
 
-Supabase for database and authentication hosting
+Questions to ask AI:
+
+1.
+I just created a superbase project and enabled authentication for email only. 
+
+Can you help me with the database table setup?
+
+2. 
+Just to show you how this works initially before we start creating tons of tables.
+asek AI: Can you create only two tables to start (No categories). 
+
+So the first is a profiles table(id, username, full name, created at, updated at)
+
+Second is the recipes table(id, created at,User ID title, ingredients, instructions, cooking time,Difficulty,category)
+
+3.
+asek AI: 
+We have created 2 database table in superbase [profiles and recipes]. Please reference this image so you know what fields have in each of the two data tabels. 
+
+Now lets go ahead and start the initial setup of superbase in this project. Please walk me through this. 
+
+
+4. Follow instructions from step 3:
+
+5. ask AI:
+we have populated .env file inside our  codebase. 
+
+can you just implement a quick test on our home page to make sure we are connected to superbase?
