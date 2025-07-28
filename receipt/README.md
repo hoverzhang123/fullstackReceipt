@@ -39,6 +39,8 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 git remote set-url origin git@github.com-hoverzhang123:hoverzhang123/fullstackReceipt.git
 
+# Create .mdc type file for rules and put "Product Requirements Document" inside and auto apply
+
 # 
 执行命令创建：
 npx create-next-app@latest
@@ -53,6 +55,7 @@ npx create-next-app@latest
 
 # run website
 npm run dev
+
 
 
 #Add lines below for each request:
@@ -145,4 +148,11 @@ we have populated .env file inside our  codebase.
 
 can you just implement a quick test on our home page to make sure we are connected to superbase?
 
+6.
+please remove superbase test in my UI. Thanks.
 
+7. 
+let us now begin work on auth components/files
+
+8.
+We would like to test authentication flow.

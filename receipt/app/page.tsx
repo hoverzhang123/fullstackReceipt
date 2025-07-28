@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * 主页
  * 组合所有组件，构建完整页面
@@ -13,7 +15,6 @@ export default function Home() {
       <Header />
       
       <main className="flex-grow">
-        {/* 欢迎区域 */}
         <HeroSection />
 
         {/* 特色食谱区域 */}
