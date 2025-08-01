@@ -1,0 +1,66 @@
+@Library('jenkins@main') _
+
+pipeline {
+    agent {
+        label 'amzlnx2'
+    }
+
+    parameters {
+        string(name: 'TERRAFORM_ARTIFACT_VERSION', defaultValue: '', description: 'Terraform artifact version to deploy.')
+    }
+
+    environment {
+        GROUP = "releng"
+        PLATFORM = "binary"
+    }
+
+    stages {
+        stage('Retrieve Terraform Zip from Artifactory') {
+            when {
+                expression { params.TERRAFORM_ARTIFACT_VERSION != '' }
+            }
+            agent {
+                docker {
+                    image "278833423079.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/plat/ci-base-build:2.0-c4bca38c"
+                    registryUrl "${env.ECR_PRIVATE_REGISTRY}"
+                    registryCredentialsId "ecr:${AWS_DEFAULT_REGION}:CHEWY-cross-jenkins"
+                    reuseNode true
+                    args "--entrypoint='' -v /var/lib/jenkins/.ssh/:/home/jenkins/.ssh/"
+                }
+            }
+            steps {
+                script {
+                    arti.pull("binary", "jenkins-eks-terraform", "${params.TERRAFORM_ARTIFACT_VERSION}", true)
+                }
+            }
+        }
+        stage ('Terraform plan + apply') {
+            when {
+                expression { params.TERRAFORM_ARTIFACT_VERSION != '' }
+            }
+            agent {
+                docker {
+                    image "278833423079.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/plat/ci-base-build:2.0-c4bca38c"
+                    registryUrl "${env.ECR_PRIVATE_REGISTRY}"
+                    registryCredentialsId "ecr:${AWS_DEFAULT_REGION}:CHEWY-cross-jenkins"
+                    reuseNode true
+                    args "--entrypoint='' -v /var/lib/jenkins/.ssh/:/home/jenkins/.ssh/"
+                }
+            }
+            steps {
+                dir("terraform") {
+                    sh """
+                        terraform init -reconfigure
+                        terraform plan -var-file="environments/dev.tfvars"
+                    """
+                    timeout(time: 10, unit: 'MINUTES') {
+                        input(message: 'Run apply?')
+                    }
+                    sh """
+                        terraform apply -auto-approve -var-file="environments/dev.tfvars"
+                    """      
+                }
+            }
+        }
+    }
+}

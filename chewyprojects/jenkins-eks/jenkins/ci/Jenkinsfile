@@ -1,0 +1,200 @@
+@Library('jenkins@main') _
+
+library identifier: 'red-supergiant@1.5.0', retriever: modernSCM([
+    $class: 'GitSCMSource',
+    remote: 'https://github.com/Chewy-Inc/red-supergiant.git',
+    credentialsId: 'jenkins-github-userpass'])
+
+def terraformChanges = false
+def awsEfsCsiDriverUpdate = false
+def forceTerraformApply = false
+
+pipeline {
+  agent {
+    label 'amzlnx2'
+  }
+  environment {
+    GROUP = "releng"
+    PLATFORM = "helm"
+    ARTIFACTORY_URL = "https://chewyinc.jfrog.io/artifactory"
+  }
+
+  stages {
+    stage('Prepare Jenkins EKS Helm Charts + Publish to JFrog') {
+      agent {
+        docker {
+          image "278833423079.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/plat/ci-base-build:8f663b39"
+          registryUrl "${env.ECR_PRIVATE_REGISTRY}"
+          registryCredentialsId "ecr:${AWS_DEFAULT_REGION}:CHEWY-cross-jenkins"
+          reuseNode true
+          args "--entrypoint= -v /var/lib/jenkins/.ssh/:/home/jenkins/.ssh/ -e HOME=${env.HOME} -u root:root"
+        }
+      }
+      steps {
+        script {
+          sh "git config --global --add safe.directory ${env.WORKSPACE}"
+          
+          def jenkinsChartPath = "./helm/jenkins-eks"
+          def jenkinsEksappVersion = sh(
+                        script: "grep '^appVersion:' ${jenkinsChartPath}/Chart.yaml | awk '{print \$2}'",
+                        returnStdout: true
+                    ).trim()
+          def currentVersion = ""
+          def shortSha = sh(script: "git rev-parse --short HEAD",returnStdout: true)
+          withCredentials([string(credentialsId: 'jenkins-github-token', variable: 'GH_TOKEN')]) {
+            if ("${env.BRANCH_NAME}" == "main") {
+              currentVersion = semver.getVersion('minor')
+            } else {
+              currentVersion = semver.getVersion('prerelease')+ "-${env.BUILD_NUMBER}." + shortSha.trim()
+            }
+          }
+          def chartVersion = currentVersion
+          sh "echo chart version: ${chartVersion}"
+          def chartName = sh(
+                        script: "grep '^name:' ${jenkinsChartPath}/Chart.yaml | awk '{print \$2}'",
+                        returnStdout: true
+                    ).trim()
+          
+          env.CHART_VERSION = chartVersion
+          env.CHART_NAME = chartName
+          
+          arti.helmInit()      
+          arti.helmPackage(jenkinsChartPath, jenkinsEksappVersion, chartVersion)
+          arti.publish(
+            "artifacts/helm/${chartName}-${chartVersion}.tgz",
+            chartVersion
+          )
+          
+          if (awsEfsCsiDriverUpdate) {
+            def efsChartPath = "./helm/aws-efs-csi-driver"
+            def efsAppVersion = sh(
+              script: "grep '^appVersion:' ${efsChartPath}/Chart.yaml | awk '{print \$2}'",
+              returnStdout: true
+            ).trim()
+            def efsChartName = sh(
+              script: "grep '^name:' ${efsChartPath}/Chart.yaml | awk '{print \$2}'",
+              returnStdout: true
+            ).trim()
+            def efsChartVersion = "${efsAppVersion}-${env.BUILD_NUMBER}"
+
+            echo "EFS APP VERSION: ${efsAppVersion}"
+            echo "EFS CHART VERSION: ${efsChartVersion}"
+            echo "EFS CHART NAME: ${efsChartName}"
+
+            arti.helmPackage(efsChartPath, efsAppVersion, efsChartVersion)
+            arti.publish(
+              "artifacts/helm/${efsChartName}-${efsChartVersion}.tgz",
+              efsChartVersion
+            )
+          }
+        }
+      }
+    }
+    stage('Terraform validate + check for changes') {
+        agent {
+            docker {
+                image "278833423079.dkr.ecr.us-east-1.amazonaws.com/plat/chewy-terraform:1.8.4"
+                registryUrl "${env.ECR_PRIVATE_REGISTRY}"
+                registryCredentialsId "ecr:${AWS_DEFAULT_REGION}:CHEWY-cross-jenkins"
+                reuseNode true
+                args "--entrypoint='' -v /var/lib/jenkins/.ssh/:/home/jenkins/.ssh/"
+            }
+        } 
+        stages {
+            stage('Terraform validate') {
+                steps {
+                    dir("terraform") {
+                        sh """
+                            terraform init -backend=false
+                            terraform validate
+                        """
+                    }
+                }
+            }
+            stage('Check for Terraform changes') {
+                when {
+                    expression { !forceTerraformApply }
+                }
+                steps {
+                    dir("terraform") {
+                        script {
+                            def exitCode = sh(
+                                script: """
+                                    terraform init
+                                    terraform plan -var-file="environments/dev.tfvars" -detailed-exitcode
+                                """,
+                                returnStatus: true
+                            )
+                            if (exitCode == 2) {
+                                echo "Terraform changes detected."
+                                terraformChanges = true
+                            } else if (exitCode == 0) {
+                                echo "No Terraform changes."
+                            } else {
+                                error("Terraform plan failed with exit code ${exitCode}")
+                            }
+                        }
+                    }
+                }
+            }
+            stage('Force Terraform Changes') {
+                when {
+                    expression { forceTerraformApply }
+                }
+                steps {
+                    script {
+                        echo "forceTerraformApply is enabled - skipping change detection"
+                        terraformChanges = true
+                    }
+                }
+            }
+        }
+    }
+    stage('Version Terraform Artifact') {
+        when {
+            expression { terraformChanges || forceTerraformApply }
+        }
+        steps {
+            script {
+                echo "Terraform artifact version: ${env.CHART_VERSION}"
+            }
+        }
+    }
+    stage('Zip + Push Terraform') {
+        when {
+            expression { terraformChanges || forceTerraformApply }
+        }
+        agent {
+            docker {
+                image "278833423079.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com/plat/ci-base-build:2.0-c4bca38c"
+                registryUrl "${env.ECR_PRIVATE_REGISTRY}"
+                registryCredentialsId "ecr:${AWS_DEFAULT_REGION}:CHEWY-cross-jenkins"
+                reuseNode true
+                args "--entrypoint='' -v /var/lib/jenkins/.ssh/:/home/jenkins/.ssh/"
+            }
+        }
+        environment {
+            PLATFORM = 'binary'
+        }
+        steps {
+            script {
+                def TF_ARTIFACT_NAME = "jenkins-eks-terraform-${env.CHART_VERSION}.tgz"
+                sh "tar -czf ${TF_ARTIFACT_NAME} ./terraform"
+                arti.publish("${TF_ARTIFACT_NAME}", "${env.CHART_VERSION}")
+                arti.addPropertyToArtifact("${TF_ARTIFACT_NAME}", "terraformVersion=1.8.4")
+            }
+        }
+    }
+  }
+  post {
+    success {
+      script {
+        if (forceTerraformApply) {
+          echo "✅ Published Helm chart ${env.CHART_NAME}-${env.CHART_VERSION}.tgz to JFrog (FORCED)"
+        } else {
+          echo "✅ Published Helm chart ${env.CHART_NAME}-${env.CHART_VERSION}.tgz to JFrog"
+        }
+      }
+    }
+  }
+}
