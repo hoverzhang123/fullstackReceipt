@@ -1,0 +1,16 @@
+.idea/*
+lib/*
+*.iml
+
+# Ignore Gradle project-specific cache directory
+.gradle
+
+# Sonarlint plugin
+.idea/sonarlint
+.DS_Store
+
+# Ignore Gradle build output directory
+build
+
+#Ignore version.txt
+version.txt

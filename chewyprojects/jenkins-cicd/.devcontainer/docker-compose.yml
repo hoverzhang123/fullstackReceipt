@@ -1,0 +1,52 @@
+version: "3.7"
+
+# Volumes are kinda like defining AWS EBS volumes. They live seperate from the container.
+# When a container is destroyed and recreated, it still uses the same volume so no data is lost.
+# NOTE: IOps are a LOT more performant within a docker volume over local writes inside
+# the image or IOps on a mount from the host.
+
+volumes:
+  aws-creds-volume:
+  gradle-home:
+  gradle-cache:
+  build-cache:
+
+services:
+  # NOTE: if more services are added to the docker-compose, they need to be added to `runServices`
+  # in the devcontainer.json as well.
+  vscode:
+    cap_add:
+      - SYS_PTRACE
+    env_file:
+      - base.devcontainer.env
+    build:
+      context: ./../
+      dockerfile: ./.devcontainer/Dockerfile
+      target: base
+    image: basedevcontainer
+    ports:
+      - 8123:8000
+    volumes:
+      - ./..:/workspace
+      # Aws credentials mounted so it lasts for different container runs
+      - aws-creds-volume:/home/vscode/.aws
+      # Mounting the gradle directory for more performant installs.
+      - gradle-home:/home/vscode/.gradle
+      - build-cache:/workspace/build
+      - gradle-cache:/workspace/.gradle
+      # The AWS SSO profiles to use for EKS:
+      # - ./../sso-profiles:/home/vscode/.aws/config
+      # SSH for git commands:
+      - ~/.ssh:/home/vscode/.ssh
+      # Docker socket to access Docker server
+      - /var/run/docker.sock:/var/run/docker.sock
+      # ZSH history
+      - ~/.zsh_history:/home/vscode/.zsh_history
+      # Misc host home files - these are put in a temp location so that the devcontainer doesn't clobber them.
+      - ~/.netrc:/tmp/home/.netrc
+      - ~/.zshrc:/tmp/home/.zshrc
+      - ~/.bashrc:/tmp/home/.bashrc
+      - ~/.oh-my-zsh:/tmp/home/.oh-my-zsh
+      - ~/.localrc:/tmp/home/.localrc
+      - ~/.gitconfig:/tmp/home/.gitconfig
+    entrypoint: ["zsh", "-c", "while sleep 1000; do :; done"]

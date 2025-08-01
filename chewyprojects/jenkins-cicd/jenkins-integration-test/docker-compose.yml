@@ -1,0 +1,25 @@
+version: '3.8'
+services:
+  jenkins:
+    container_name: jenkins
+    build:
+      context: ..
+      dockerfile: ./jenkins-integration-test/Dockerfile
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    healthcheck:
+      test: curl -s -I http://0.0.0.0:8080/job/$INTEGRATION_TEST_NAME/api/json | grep -qi "content-type:.*application/json"
+      retries: 5
+      start_period: 30s
+
+  integration-test:
+    container_name: ${INTEGRATION_TEST_NAME}
+    build:
+      context: .
+      dockerfile: ./integration.Dockerfile
+    environment:
+      - JOB_NAME=${INTEGRATION_TEST_NAME}
+    depends_on:
+      jenkins:
+        condition: service_healthy

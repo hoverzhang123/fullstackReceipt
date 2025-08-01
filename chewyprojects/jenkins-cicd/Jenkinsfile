@@ -1,0 +1,148 @@
+import hudson.AbortException
+
+library 'jenkins-library'
+
+library identifier: 'innersource-jenkins-utils@main', retriever: modernSCM(
+        [$class: 'GitSCMSource',
+         remote: 'https://github.com/Chewy-Inc/innersource-jenkins-utils.git',
+         credentialsId: 'jenkins-github-userpass'])
+
+APP_NAME = 'jenkins-cicd'
+
+library identifier: 'jenkins-cicd@main', retriever: modernSCM([
+        $class: 'GitSCMSource',
+        remote: 'https://github.com/Chewy-Inc/jenkins-cicd.git',
+        credentialsId: 'jenkins-github-userpass'])
+
+def pipelines = cicd.init(
+        projectName: 'jenkins-cicd',
+        assignmentGroup: 'RXP Search and API Team',
+        namespace: 'rxp-jenkins-test',
+        versionIncrement: 'patch',
+        slackParams: [
+            channel: 'cicd-dev',
+        ],
+        modules: [
+                    [type:'CicdSandboxTrigger'],
+                ]
+)
+
+def runSonarqube() {
+    env.DEPLOY_STEP = "Unit Tests"
+    checkSonarQube()
+    String testResults = sh(returnStdout: true, script: "find . | grep test-results || true | grep xml || true").trim()
+    if (testResults) {
+        junit '**/test-results/**/*.xml'
+    }
+}
+
+def checkSonarQube() {
+    String gradleCheck = "./gradlew check sonar"
+    withSonarQubeEnv(env.SONARQUBE_ENV) {
+        sh """#!/bin/bash
+            ${ecrLogin()}
+            $gradleCheck
+        """
+    }
+}
+
+private void jenkinsIntegrationTest(String jobName) {
+    String dockerCompose = """
+        INTEGRATION_TEST_NAME=${jobName} \
+        docker-compose \
+        -f jenkins-integration-test/docker-compose.yml \
+        up \
+        --abort-on-container-exit
+    """
+
+    def status = sh(script: dockerCompose, returnStatus: true)
+
+    sh "docker cp ${jobName}:/output/${jobName}.txt ."
+    sh "cat ${jobName}.txt"
+    sh "rm -f ${jobName}.txt"
+
+    if (status != 0) {
+        throw new AbortException("Jenkins Integration Test failed, see above log for details");
+    }
+}
+
+pipeline {
+    agent {
+        label 'amzlnx2'
+    }
+    tools {
+        jdk 'openjdk-17.0.1'
+        terraform 'terraform-1.0.2'
+    }
+    environment {
+        ARTIFACTORY_USER = credentials('artifactory-username')
+        ARTIFACTORY_PASSWORD = credentials('artifactory-password')
+        SONARQUBE_ENV = 'sonarqube-nonprod'
+    }
+    options {
+        disableConcurrentBuilds()
+        timeout(time: 2, unit: 'HOURS')
+    }
+
+    stages {
+        stage('Semver Integration Test') {
+            steps {
+                script {
+                    jenkinsIntegrationTest('semver-integration-test')
+                }
+            }
+        }
+        stage('Slack User Integration Test') {
+            steps {
+                script {
+                    jenkinsIntegrationTest('getSlackUserFromEmail-integration-test')
+                }
+            }
+        }
+        stage('check sonarqube') {
+            steps {
+                script {
+                    runSonarqube()
+                    pipelines.defaultStages()
+                }
+            }
+        }
+        stage('Build Release') {
+            when {
+                anyOf {
+                    branch pattern: 'main'
+                }
+            }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'jenkins-github-userpass',
+                    passwordVariable: 'GRGIT_PASS',
+                    usernameVariable: 'GRGIT_USER')]) {
+                    script {
+                        sh "./gradlew release"
+                        def appVersion = sh(returnStdout: true, script: "cat version.txt").trim()
+                        cicd.sendSlackMessage("(${APP_NAME}) New version available - ${appVersion}", 'green', 'cicd-dev')
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts artifacts: '*', allowEmptyArchive: true
+            publishHTML([
+                    allowMissing: false,
+                    alwaysLinkToLastBuild: false,
+                    keepAll: true,
+                    reportDir: 'build/reports',       // directory containing the report
+                    reportFiles: 'codenarc.html',     // the report file name
+                    reportName: 'CodeNarc Report'
+            ])
+        }
+        failure {
+            script {
+                pipelines.reportBuildFailure()
+            }
+        }
+    }
+}

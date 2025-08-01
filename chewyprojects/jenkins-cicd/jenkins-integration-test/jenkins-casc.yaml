@@ -1,0 +1,17 @@
+jenkins:
+  systemMessage: "Jenkins configured for testing shared library"
+
+unclassified:
+  globalLibraries:
+    libraries:
+      - name: "jenkins-cicd"
+        retriever:
+          legacySCM:
+            scm:
+              filesystem:
+                path: "/library"
+        defaultVersion: "main"
+
+jobs:
+  - file: /library/jenkins-integration-test/jobs/getSlackUserFromEmail.groovy
+  - file: /library/jenkins-integration-test/jobs/semver.groovy

@@ -1,0 +1,93 @@
+{
+    "name": "Jenkins CICD",
+    "dockerComposeFile": [
+        "docker-compose.yml"
+    ],
+    "shutdownAction": "stopCompose",
+    "postCreateCommand": "git config --global --add safe.directory /workspace && zsh ./.devcontainer/post-create-command.sh",
+    "postStartCommand": "git config --global --add safe.directory ${containerWorkspaceFolder} && ssh-keyscan github.com >> ~/.ssh/known_hosts && sudo usermod -aG docker vscode && sudo chmod 666 /var/run/docker.sock",
+    "workspaceFolder": "/workspace",
+    "service": "vscode",
+    "remoteUser": "vscode",
+    // NOTE: if more services are added to the docker-compose, they need to be added to `runServices`
+    "runServices": [
+        "vscode"
+    ],
+    "overrideCommand": true,
+    "features": {
+        "git": "os-provided",
+        "sshd": "latest",
+        "ghcr.io/devcontainers/features/github-cli:1": {},
+        // https://github.com/devcontainers/features/tree/main/src/java
+        "ghcr.io/devcontainers/features/java:1": {
+            "version": "21",
+            "installGradle": "true",
+            "gradleVersion": "8.7",
+            "installGroovy": "true"
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "settings": {
+                // General Settings
+                "files.eol": "\n",
+                // Terminal
+                "terminal.integrated.defaultProfile.linux": "zsh",
+                "terminal.integrated.profiles.linux": {
+                    "zsh": {
+                        "path": "/usr/bin/zsh"
+                    }
+                },
+                // Docker
+                "remote.extensionKind": {
+                    "ms-azuretools.vscode-docker": "workspace"
+                },
+                "koverage.coverageFileNames": [
+                    "lcov.info",
+                    "cov.xml",
+                    "coverage.xml",
+                    "jacoco.xml",
+                    "jacocoTestReport.xml"
+                ],
+                "koverage.autoRefresh": false,
+                "koverage.coverageFilePaths":[
+                    "./build/reports/**/*"
+                ],
+                "coverage-gutters.coverageFileNames": [
+                    "lcov.info",
+                    "cov.xml",
+                    "coverage.xml",
+                    "cobertura.xml",
+                    "jacoco.xml",
+                    "coverage.cobertura.xml",
+                    "jacocoTestReport.xml"
+                ],
+                "coverage-gutters.coverageBaseDir": "**/build/reports/**/*",
+                "coverage-gutters.showGutterCoverage": true,
+                "coverage-gutters.showLineCoverage": true
+            },
+            "extensions": [
+                "oderwat.indent-rainbow",
+                "ms-azuretools.vscode-docker",
+                "Tyriar.sort-lines",
+                "nhoizey.gremlins",
+                "mikestead.dotenv",
+                "adamhartford.vscode-base64",
+                "vscode-icons-team.vscode-icons",
+                "vscjava.vscode-java-pack",
+                "VisualStudioExptTeam.vscodeintellicode",
+                "richardwillis.vscode-gradle",
+                "davidanson.vscode-markdownlint",
+                "editorconfig.editorconfig",
+                "mohsen1.prettify-json",
+                "shardulm94.trailing-spaces",
+                "MellowMarshmallow.groovy",
+                "tenninebt.vscode-koverage",
+                "oracle.oracle-java",
+                "ryanluker.vscode-coverage-gutters"
+            ],
+            "editor.insertSpaces": true,
+            "editor.tabSize": 4
+        }
+    }
+}

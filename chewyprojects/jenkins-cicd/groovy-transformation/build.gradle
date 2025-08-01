@@ -1,0 +1,14 @@
+plugins {
+  id "groovy"
+}
+
+repositories {
+    // Use Maven Central for resolving dependencies.
+    mavenCentral()
+}
+
+
+dependencies {
+    implementation 'com.cloudbees:groovy-cps:1.22'
+    implementation 'org.codehaus.groovy:groovy-all:2.4.21'
+}
